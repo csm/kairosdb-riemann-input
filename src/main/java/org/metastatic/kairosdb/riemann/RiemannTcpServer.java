@@ -65,7 +65,7 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
         ChannelPipeline pipeline = Channels.pipeline();
         LengthFieldBasedFrameDecoder framer = new LengthFieldBasedFrameDecoder(65536, 0, 4, 0, 4);
         pipeline.addLast("framer", framer);
-        ProtobufDecoder decoder = new ProtobufDecoder(Proto.Event.getDefaultInstance());
+        ProtobufDecoder decoder = new ProtobufDecoder(Proto.Msg.getDefaultInstance());
         pipeline.addLast("decoder", decoder);
         pipeline.addLast("handler", this);
         return pipeline;
@@ -74,36 +74,40 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
         final Object message = e.getMessage();
-        if (message instanceof Proto.Event) {
-            Event event = (Event) message;
-            DataPoint dp;
-            if (event.hasMetricD()) {
-                dp = doubleDataPointFactory.createDataPoint(event.getTime(), event.getMetricD());
-            } else if (event.hasMetricF()) {
-                dp = doubleDataPointFactory.createDataPoint(event.getTime(), (double) event.getMetricF());
-            } else if (event.hasMetricSint64()) {
-                dp = longDataPointFactory.createDataPoint(event.getTime(), event.getMetricSint64());
-            } else {
-                throw new ValidationException("event received with no metrics, ignoring");
-            }
-
-            ImmutableSortedMap.Builder<String, String> tags = Tags.create();
-            for (Attribute attribute : event.getAttributesList()) {
-                tags.put(attribute.getKey(), attribute.getValue());
-            }
-            for (String tag : event.getTagsList()) {
-                String[] parts = tag.split(":", 2);
-                if (parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty()) {
-                    tags.put(parts[0], parts[1]);
+        if (message instanceof Proto.Msg) {
+            Msg msg = (Msg) message;
+            logger.debug("got message: {}", msg);
+            for (Event event : msg.getEventsList()) {
+                DataPoint dp;
+                if (event.hasMetricD()) {
+                    dp = doubleDataPointFactory.createDataPoint(event.getTime(), event.getMetricD());
+                } else if (event.hasMetricF()) {
+                    dp = doubleDataPointFactory.createDataPoint(event.getTime(), (double) event.getMetricF());
+                } else if (event.hasMetricSint64()) {
+                    dp = longDataPointFactory.createDataPoint(event.getTime(), event.getMetricSint64());
                 } else {
-                    logger.info("skipping invalid tag {}; expected 'key:value' format", tag);
+                    throw new ValidationException("event received with no metrics, ignoring");
                 }
+
+                ImmutableSortedMap.Builder<String, String> tags = Tags.create();
+                for (Attribute attribute : event.getAttributesList()) {
+                    tags.put(attribute.getKey(), attribute.getValue());
+                }
+                for (String tag : event.getTagsList()) {
+                    String[] parts = tag.split(":", 2);
+                    if (parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty()) {
+                        tags.put(parts[0], parts[1]);
+                    } else {
+                        logger.info("skipping invalid tag {}; expected 'key:value' format", tag);
+                    }
+                }
+                tags.put("host", event.getHost());
+                messageCount.incrementAndGet();
+                datastore.putDataPoint(event.getService(), tags.build(), dp);
             }
-            tags.put("host", event.getHost());
-            messageCount.incrementAndGet();
-            datastore.putDataPoint(event.getService(), tags.build(), dp);
+        } else {
+            logger.warn("expected a Proto.Msg, got " + ((message != null) ? "a " + message.getClass().getName() : "null"));
         }
-        super.messageReceived(ctx, e);
     }
 
     public void start() throws KairosDBException {
