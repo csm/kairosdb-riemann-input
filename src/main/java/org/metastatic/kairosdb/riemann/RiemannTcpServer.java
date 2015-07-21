@@ -10,6 +10,8 @@ import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 import org.jboss.netty.handler.codec.frame.LengthFieldPrepender;
 import org.jboss.netty.handler.codec.protobuf.ProtobufDecoder;
 import org.jboss.netty.handler.codec.protobuf.ProtobufEncoder;
+import org.jboss.netty.handler.execution.ExecutionHandler;
+import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.kairosdb.core.DataPoint;
 import org.kairosdb.core.DataPointSet;
 import org.kairosdb.core.KairosDBService;
@@ -70,6 +72,7 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
         pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
         pipeline.addLast("decoder", new ProtobufDecoder(Msg.getDefaultInstance()));
         pipeline.addLast("encoder", new ProtobufEncoder());
+        pipeline.addLast("executor", new ExecutionHandler(new OrderedMemoryAwareThreadPoolExecutor(16, 1048576, 10485760)));
         pipeline.addLast("handler", this);
         return pipeline;
     }
