@@ -1,7 +1,5 @@
 package org.metastatic.kairosdb.riemann;
 
-import com.aphyr.riemann.Proto;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
@@ -15,9 +13,6 @@ import org.jboss.netty.handler.codec.protobuf.ProtobufEncoder;
 import org.kairosdb.core.DataPoint;
 import org.kairosdb.core.DataPointSet;
 import org.kairosdb.core.KairosDBService;
-
-import com.aphyr.riemann.Proto.*;
-import org.kairosdb.core.datapoints.DoubleDataPoint;
 import org.kairosdb.core.datapoints.DoubleDataPointFactory;
 import org.kairosdb.core.datapoints.LongDataPointFactory;
 import org.kairosdb.core.datastore.KairosDatastore;
@@ -25,6 +20,9 @@ import org.kairosdb.core.exception.KairosDBException;
 import org.kairosdb.core.reporting.KairosMetricReporter;
 import org.kairosdb.util.Tags;
 import org.kairosdb.util.ValidationException;
+import org.metastatic.shaded.com.aphyr.riemann.Proto.Attribute;
+import org.metastatic.shaded.com.aphyr.riemann.Proto.Event;
+import org.metastatic.shaded.com.aphyr.riemann.Proto.Msg;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,8 +50,8 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
     private Msg failure = Msg.newBuilder().setOk(false).buildPartial();
 
     @Inject
-    public RiemannTcpServer(@Named("kairosdb.riemannprotobuf.address") String address,
-                            @Named("kairosdb.riemannprotobuf.port") int port,
+    public RiemannTcpServer(@Named("kairosdb.riemannserver.address") String address,
+                            @Named("kairosdb.riemannserver.port") int port,
                             @Named("HOSTNAME") String hostname,
                             KairosDatastore datastore,
                             LongDataPointFactory longDataPointFactory,
@@ -70,7 +68,7 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
         ChannelPipeline pipeline = Channels.pipeline();
         pipeline.addLast("frameDecoder", new LengthFieldBasedFrameDecoder(65536, 0, 4, 0, 4));
         pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
-        pipeline.addLast("decoder", new ProtobufDecoder(Proto.Msg.getDefaultInstance()));
+        pipeline.addLast("decoder", new ProtobufDecoder(Msg.getDefaultInstance()));
         pipeline.addLast("encoder", new ProtobufEncoder());
         pipeline.addLast("handler", this);
         return pipeline;
@@ -96,7 +94,9 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
 
                 ImmutableSortedMap.Builder<String, String> tags = Tags.create();
                 for (Attribute attribute : event.getAttributesList()) {
-                    tags.put(attribute.getKey(), attribute.getValue());
+                    if (attribute.hasKey() && attribute.hasValue()) {
+                        tags.put(attribute.getKey(), attribute.getValue());
+                    }
                 }
                 for (String tag : event.getTagsList()) {
                     String[] parts = tag.split(":", 2);
