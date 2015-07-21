@@ -6,7 +6,7 @@
 
     <groupId>org.metastatic</groupId>
     <artifactId>kairosdb-riemann-input</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.1</version>
 
     <repositories>
         <repository>
