@@ -79,7 +79,6 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
         final Object message = e.getMessage();
         if (message instanceof Msg) {
             Msg msg = (Msg) message;
-            logger.debug("got message: {}", msg);
             for (Event event : msg.getEventsList()) {
                 DataPoint dp;
                 if (event.hasMetricD()) {
