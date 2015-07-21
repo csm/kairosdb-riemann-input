@@ -18,4 +18,4 @@ If events have attributes in them, each attribute will become a tag.
 
 Any tag in the "tags" list will be split into two parts, separated by a colon (`:`). If there are two non-empty parts, that becomes a tag as well.
 
-If you send queries to your KairosDB server, they will be ignored and unanswered.
+If you send queries to your KairosDB server, they will be ignored and unanswered. We could conceivably support that, but not now.
