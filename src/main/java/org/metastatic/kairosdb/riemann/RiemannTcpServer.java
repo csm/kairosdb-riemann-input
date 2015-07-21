@@ -9,7 +9,9 @@ import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.*;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
+import org.jboss.netty.handler.codec.frame.LengthFieldPrepender;
 import org.jboss.netty.handler.codec.protobuf.ProtobufDecoder;
+import org.jboss.netty.handler.codec.protobuf.ProtobufEncoder;
 import org.kairosdb.core.DataPoint;
 import org.kairosdb.core.DataPointSet;
 import org.kairosdb.core.KairosDBService;
@@ -46,6 +48,9 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
     private final String hostname;
     private ServerBootstrap serverBootstrap;
 
+    private Msg success = Msg.newBuilder().setOk(true).build();
+    private Msg failure = Msg.newBuilder().setOk(false).buildPartial();
+
     @Inject
     public RiemannTcpServer(@Named("kairosdb.riemannprotobuf.address") String address,
                             @Named("kairosdb.riemannprotobuf.port") int port,
@@ -63,10 +68,10 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
 
     public ChannelPipeline getPipeline() throws Exception {
         ChannelPipeline pipeline = Channels.pipeline();
-        LengthFieldBasedFrameDecoder framer = new LengthFieldBasedFrameDecoder(65536, 0, 4, 0, 4);
-        pipeline.addLast("framer", framer);
-        ProtobufDecoder decoder = new ProtobufDecoder(Proto.Msg.getDefaultInstance());
-        pipeline.addLast("decoder", decoder);
+        pipeline.addLast("frameDecoder", new LengthFieldBasedFrameDecoder(65536, 0, 4, 0, 4));
+        pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
+        pipeline.addLast("decoder", new ProtobufDecoder(Proto.Msg.getDefaultInstance()));
+        pipeline.addLast("encoder", new ProtobufEncoder());
         pipeline.addLast("handler", this);
         return pipeline;
     }
@@ -74,7 +79,7 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
         final Object message = e.getMessage();
-        if (message instanceof Proto.Msg) {
+        if (message instanceof Msg) {
             Msg msg = (Msg) message;
             logger.debug("got message: {}", msg);
             for (Event event : msg.getEventsList()) {
@@ -105,9 +110,16 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
                 messageCount.incrementAndGet();
                 datastore.putDataPoint(event.getService(), tags.build(), dp);
             }
+            logger.debug("wrote off all events, sending ok");
+            e.getChannel().write(success);
         } else {
-            logger.warn("expected a Proto.Msg, got " + ((message != null) ? "a " + message.getClass().getName() : "null"));
+            throw new ValidationException("expected a Proto.Msg, got " + ((message != null) ? "a " + message.getClass().getName() : "null"));
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
+        e.getChannel().write(Msg.newBuilder(failure).setError(e.getCause().toString()).build());
     }
 
     public void start() throws KairosDBException {

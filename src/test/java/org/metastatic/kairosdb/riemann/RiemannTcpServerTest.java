@@ -1,6 +1,8 @@
 package org.metastatic.kairosdb.riemann;
 
+import com.aphyr.riemann.Proto;
 import com.aphyr.riemann.client.RiemannClient;
+import com.aphyr.riemann.client.ServerError;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,7 +33,7 @@ public class RiemannTcpServerTest {
 
     @Before
     public void setUp() throws KairosDBException, IOException, InterruptedException {
-        port = new Random().nextInt(1024) + 30000;
+        port = 31337; //new Random().nextInt(1024) + 30000;
         memDatastore = new MemoryDatastore();
         datastore = new KairosDatastore(memDatastore, new QueryQueuingManager(1, "127.0.0.1"), Collections.<DataPointListener>emptyList(), null);
         tcpServer = new RiemannTcpServer("127.0.0.1", port, "127.0.0.1", datastore, new LongDataPointFactoryImpl(), new DoubleDataPointFactoryImpl());
@@ -55,7 +57,7 @@ public class RiemannTcpServerTest {
 
     @Test
     public void testMessageD() throws IOException {
-        client.event().service("test.riemann")
+        Proto.Msg result = client.event().service("test.riemann")
                 .metric(3.14159d)
                 .host("localhost")
                 .time(System.currentTimeMillis())
@@ -63,6 +65,8 @@ public class RiemannTcpServerTest {
                 .attribute("bar", "baz")
                 .tag("oldstyle:tags")
                 .send().deref(1, TimeUnit.SECONDS);
+        assertNotNull(result);
+        assertTrue(result.getOk());
         LinkedList<MemoryDatastore.Entry> list = memDatastore.dataPoints.get("test.riemann");
         assertNotNull(list);
         assertEquals(1, list.size());
@@ -75,7 +79,7 @@ public class RiemannTcpServerTest {
 
     @Test
     public void testMessageL() throws IOException {
-        client.event().service("test.riemann")
+        Proto.Msg result = client.event().service("test.riemann")
                 .metric(31337L)
                 .host("localhost")
                 .time(System.currentTimeMillis())
@@ -83,6 +87,8 @@ public class RiemannTcpServerTest {
                 .attribute("bar", "baz")
                 .tag("oldstyle:tags")
                 .send().deref(1, TimeUnit.SECONDS);
+        assertNotNull(result);
+        assertTrue(result.getOk());
         LinkedList<MemoryDatastore.Entry> list = memDatastore.dataPoints.get("test.riemann");
         assertNotNull(list);
         assertEquals(1, list.size());
@@ -91,5 +97,21 @@ public class RiemannTcpServerTest {
         assertEquals("bar", list.get(0).tags.get("foo"));
         assertEquals("baz", list.get(0).tags.get("bar"));
         assertEquals("tags", list.get(0).tags.get("oldstyle"));
+    }
+
+    @Test
+    public void testMessageNoMetric() throws IOException {
+        try {
+            Proto.Msg result = client.event().service("test.riemann")
+                    .host("localhost")
+                    .time(System.currentTimeMillis())
+                    .attribute("foo", "bar")
+                    .attribute("bar", "baz")
+                    .tag("oldstyle:tags")
+                    .send().deref(1, TimeUnit.SECONDS);
+            fail();
+        } catch (ServerError e) {
+            // pass
+        }
     }
 }
