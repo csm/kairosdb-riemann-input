@@ -8,11 +8,13 @@ The general idea is you can add this to your `kairosdb.properties`:
     kairosdb.riemannserver.address=0.0.0.0
     kairosdb.service.riemann=org.metastatic.kairosdb.riemann.RiemannModule
     
+And, make sure the `kairosdb-riemann-input` and [`protobuf-java`](http://mvnrepository.com/artifact/com.google.protobuf/protobuf-java/2.6.1) jars are in KairosDB's classpath.
+    
 Then in your Riemann config:
 
     (require '[riemann.client])    
     (streams
-      (forward (riemann.client/tcp-client {:host "kairosdb.foo.com" :port 5555}))
+      (forward (riemann.client/tcp-client {:host "kairosdb.foo.com" :port 5555})))
 
 If events have attributes in them, each attribute will become a tag.
 
