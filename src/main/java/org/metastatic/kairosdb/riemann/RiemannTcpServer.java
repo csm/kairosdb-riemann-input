@@ -85,11 +85,11 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
             for (Event event : msg.getEventsList()) {
                 DataPoint dp;
                 if (event.hasMetricD()) {
-                    dp = doubleDataPointFactory.createDataPoint(event.getTime(), event.getMetricD());
+                    dp = doubleDataPointFactory.createDataPoint(event.getTime() * 1000, event.getMetricD());
                 } else if (event.hasMetricF()) {
-                    dp = doubleDataPointFactory.createDataPoint(event.getTime(), (double) event.getMetricF());
+                    dp = doubleDataPointFactory.createDataPoint(event.getTime() * 1000, (double) event.getMetricF());
                 } else if (event.hasMetricSint64()) {
-                    dp = longDataPointFactory.createDataPoint(event.getTime(), event.getMetricSint64());
+                    dp = longDataPointFactory.createDataPoint(event.getTime() * 1000, event.getMetricSint64());
                 } else {
                     throw new ValidationException("event received with no metrics, ignoring");
                 }
