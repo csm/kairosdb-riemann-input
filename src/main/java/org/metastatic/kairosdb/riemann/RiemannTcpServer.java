@@ -121,7 +121,16 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-        e.getChannel().write(Msg.newBuilder(failure).setError(e.getCause().toString()).build());
+        try {
+            e.getChannel().write(Msg.newBuilder(failure).setError(e.getCause().toString()).build());
+        } catch (Exception ex) {
+            logger.warn("exception caught in exception handler, bailing", ex);
+            try {
+                e.getChannel().close();
+            } catch (Exception ex2) {
+                logger.warn("exception trynig to close channel", ex2);
+            }
+        }
     }
 
     public void start() throws KairosDBException {
