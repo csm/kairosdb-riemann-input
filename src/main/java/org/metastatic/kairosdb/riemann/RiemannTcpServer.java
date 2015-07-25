@@ -31,16 +31,19 @@ import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements ChannelPipelineFactory, KairosDBService, KairosMetricReporter {
-    private static final String REPORTING_METRIC_NAME = "kairosdb.protocol.riemann_request_count";
+    private static final String REPORTING_METRIC_REQUESTS_NAME = "kairosdb.protocol.riemann_request_count";
+    private static final String REPORTING_METRIC_EVENTS_NAME = "kairosdb.protocol.riemann_event_count";
     static final Logger logger = LoggerFactory.getLogger(RiemannTcpServer.class);
     private final InetAddress address;
     private final int port;
+    private final AtomicInteger eventCount = new AtomicInteger();
     private final AtomicInteger messageCount = new AtomicInteger();
     private final KairosDatastore datastore;
     private final LongDataPointFactory longDataPointFactory;
@@ -109,9 +112,10 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
                     }
                 }
                 tags.put("host", event.getHost());
-                messageCount.incrementAndGet();
+                eventCount.incrementAndGet();
                 datastore.putDataPoint(event.getService(), tags.build(), dp);
             }
+            messageCount.incrementAndGet();
             logger.debug("wrote off all events, sending ok");
             e.getChannel().write(success);
         } else {
@@ -150,9 +154,12 @@ public class RiemannTcpServer extends SimpleChannelUpstreamHandler implements Ch
     }
 
     public List<DataPointSet> getMetrics(long now) {
-        DataPointSet dps = new DataPointSet(REPORTING_METRIC_NAME);
-        dps.addTag("host", hostname);
-        dps.addDataPoint(longDataPointFactory.createDataPoint(now, messageCount.getAndSet(0)));
-        return Collections.singletonList(dps);
+        DataPointSet requests = new DataPointSet(REPORTING_METRIC_REQUESTS_NAME);
+        requests.addTag("host", hostname);
+        requests.addDataPoint(longDataPointFactory.createDataPoint(now, messageCount.getAndSet(0)));
+        DataPointSet events = new DataPointSet(REPORTING_METRIC_EVENTS_NAME);
+        events.addTag("host", hostname);
+        events.addDataPoint(longDataPointFactory.createDataPoint(now, eventCount.getAndSet(0)));
+        return Arrays.asList(requests, events);
     }
 }
